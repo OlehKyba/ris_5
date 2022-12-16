@@ -1,0 +1,107 @@
+version: '3'
+
+services:
+  ris-image:
+    image: 'ris_5'
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+  test:
+    image: 'ris_5'
+    command: pytest . -s -vv -p no:cacheprovider
+    volumes:
+      - type: bind
+        source: .
+        target: /work
+        read_only: True
+
+  mariadb-galera-0:
+    image: docker.io/bitnami/mariadb-galera:latest
+    environment:
+      - MARIADB_GALERA_CLUSTER_NAME=galera
+      - MARIADB_GALERA_MARIABACKUP_USER=my_mariabackup_user
+      - MARIADB_GALERA_MARIABACKUP_PASSWORD=my_mariabackup_password
+      - MARIADB_ROOT_PASSWORD=P4SSW0RD123
+      - MARIADB_GALERA_CLUSTER_BOOTSTRAP=yes
+      - MARIADB_GALERA_CLUSTER_ADDRESS=gcomm://mariadb-galera-0,mariadb-galera-1
+      - MARIADB_GALERA_NODE_ADDRESS=mariadb-galera-0
+      - MARIADB_USER=my_user
+      - MARIADB_PASSWORD=my_password
+      - MARIADB_DATABASE=my_database
+      - MARIADB_REPLICATION_USER=my_replication_user
+      - MARIADB_REPLICATION_PASSWORD=my_replication_password
+    volumes:
+      - 'mariadb_galera_data_0:/bitnami/mariadb'
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mariadb-galera/healthcheck.sh']
+      interval: 15s
+      timeout: 5s
+      retries: 6
+
+  mariadb-galera-1:
+    image: docker.io/bitnami/mariadb-galera:latest
+    command:
+      - bash
+      - -ec
+      - |
+          # Wait 20 seconds to guarantee creation order
+          sleep 20
+          exec /opt/bitnami/scripts/mariadb-galera/entrypoint.sh /opt/bitnami/scripts/mariadb-galera/run.sh
+    environment:
+      - MARIADB_GALERA_CLUSTER_NAME=galera
+      - MARIADB_GALERA_CLUSTER_ADDRESS=gcomm://mariadb-galera-0,mariadb-galera-1
+      - MARIADB_GALERA_NODE_ADDRESS=mariadb-galera-1
+      - MARIADB_GALERA_MARIABACKUP_USER=my_mariabackup_user
+      - MARIADB_GALERA_MARIABACKUP_PASSWORD=my_mariabackup_password
+      - MARIADB_ROOT_PASSWORD=P4SSW0RD123
+      - MARIADB_REPLICATION_USER=my_replication_user
+      - MARIADB_REPLICATION_PASSWORD=my_replication_password
+    volumes:
+      - 'mariadb_galera_data_1:/bitnami/mariadb'
+    healthcheck:
+      test: ['CMD', '/opt/bitnami/scripts/mariadb-galera/healthcheck.sh']
+      start_period: 20s
+      interval: 15s
+      timeout: 5s
+      retries: 6
+    depends_on:
+      - mariadb-galera-0
+
+  postgresql-master:
+    image: docker.io/bitnami/postgresql:14
+    ports:
+      - '5432'
+    volumes:
+      - 'postgresql_master_data:/bitnami/postgresql'
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=master
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_USERNAME=postgres
+      - POSTGRESQL_PASSWORD=my_password
+      - POSTGRESQL_DATABASE=my_database
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  postgresql-slave:
+    image: docker.io/bitnami/postgresql:14
+    ports:
+      - '5432'
+    depends_on:
+      - postgresql-master
+    environment:
+      - POSTGRESQL_REPLICATION_MODE=slave
+      - POSTGRESQL_REPLICATION_USER=repl_user
+      - POSTGRESQL_REPLICATION_PASSWORD=repl_password
+      - POSTGRESQL_MASTER_HOST=postgresql-master
+      - POSTGRESQL_PASSWORD=my_password
+      - POSTGRESQL_MASTER_PORT_NUMBER=5432
+      - ALLOW_EMPTY_PASSWORD=yes
+
+volumes:
+  mariadb_galera_data_0:
+    driver: local
+  mariadb_galera_data_1:
+    driver: local
+  postgresql_master_data:
+    driver: local
