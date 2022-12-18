@@ -31,6 +31,7 @@ services:
       - MARIADB_DATABASE=my_database
       - MARIADB_REPLICATION_USER=my_replication_user
       - MARIADB_REPLICATION_PASSWORD=my_replication_password
+      - MARIADB_GALERA_FORCE_SAFETOBOOTSTRAP=yes
     volumes:
       - 'mariadb_galera_data_0:/bitnami/mariadb'
     healthcheck:
